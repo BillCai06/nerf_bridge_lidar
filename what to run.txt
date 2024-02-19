@@ -1,0 +1,8 @@
+roscore
+rosbag play --clock --loop new32line02-12.bag 
+rosparam set use_sim_time 1
+
+
+conda deactivate
+python3 ~/catkin_ws/src/odometry_to_camera_pose/scripts/odom_to_camera_pose.py 
+python3 ~/catkin_ws/src/odometry_to_camera_pose/scripts/lidar.py 

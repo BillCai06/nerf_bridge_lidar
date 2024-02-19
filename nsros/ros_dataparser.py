@@ -4,9 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Type
-
+import open3d as o3d
 import torch
-
+import numpy as np
 from nerfstudio.cameras.cameras import Cameras, CameraType
 from nerfstudio.data.dataparsers.base_dataparser import (
     DataParser,
@@ -29,7 +29,8 @@ class ROSDataParserConfig(DataParserConfig):
     """How much to scale the camera origins by."""
     aabb_scale: float = 2.0
     """ SceneBox aabb scale."""
-
+    """Replace the unknown pixels with this color. Relevant if you have a mask but still sample everywhere."""
+    # load_3D_points: bool = True
 
 @dataclass
 class ROSDataParser(DataParser):
@@ -37,6 +38,30 @@ class ROSDataParser(DataParser):
 
     config: ROSDataParserConfig
 
+   
+    # def _load_3D_points(self, pcd_path: str, scale_factor: float):
+    #     # Load PCD file
+    #     pcd = o3d.io.read_point_cloud(pcd_path)
+    #     points = np.asarray(pcd.points, dtype=np.float32)
+    #     colors = np.asarray(pcd.colors, dtype=np.float32) * 255  # Assuming colors are in [0, 1], convert to [0, 255]
+
+    #     # Convert to PyTorch tensors
+    #     points3D = torch.from_numpy(points)
+    #     points3D_rgb = torch.from_numpy(colors).to(torch.uint8)
+
+    #     # Apply scale factor
+    #     points3D *= scale_factor
+
+    #     # Prepare output dictionary
+    #     out = {
+    #         "points3D_xyz": points3D,  # XYZ coordinates
+    #         "points3D_rgb": points3D_rgb,  # RGB colors
+    #         # Other keys might be adjusted or omitted based on the absence of COLMAP-specific data
+    #     }
+    #     print(points3D_rgb)
+    #     return out
+
+        
     def __init__(self, config: ROSDataParserConfig):
         super().__init__(config=config)
         self.data: Path = config.data
@@ -45,6 +70,7 @@ class ROSDataParser(DataParser):
 
     def get_dataparser_outputs(self, split="train", num_images: int = 500):
         dataparser_outputs = self._generate_dataparser_outputs(split, num_images)
+        # print(dataparser_outputs)
         return dataparser_outputs
 
     def _generate_dataparser_outputs(self, split="train", num_images: int = 500):
@@ -112,17 +138,28 @@ class ROSDataParser(DataParser):
         metadata = {
             "image_topic": meta["image_topic"],
             "pose_topic": meta["pose_topic"],
-            "num_images": num_images,
+            "point_cloud_topic": meta["point_cloud_topic"],
+            "num_images": meta["num_images"],
             "image_height": image_height,
             "image_width": image_width,
         }
+        # if self.config.load_3D_points:
+        #     # Load 3D points
+        #     metadata.update(self._load_3D_points("/home/bill/Downloads/000504.ply", 1.0))
+
 
         dataparser_outputs = DataparserOutputs(
             image_filenames=image_filenames,  # This is empty
             cameras=cameras,
             scene_box=scene_box,
-            metadata=metadata,
+            # mask_filenames=mask_filenames if len(mask_filenames) > 0 else None,
+            # metadata=metadata,
             dataparser_scale=self.scale_factor,
+            metadata={
+                 **metadata,
+            },
+        
         )
+        # print( metadata)
 
         return dataparser_outputs
