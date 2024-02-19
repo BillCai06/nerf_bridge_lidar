@@ -1,6 +1,7 @@
 roscore
-rosbag play --clock --loop new32line02-12.bag 
 rosparam set use_sim_time 1
+rosbag play --clock --loop ~/data/rosbag/working_d/new32line02-12.bag 
+
 
 
 conda deactivate

@@ -237,7 +237,7 @@ class ROSDataloader(DataLoader):
             r = ((rgb_ints >> 16) & 0xFF).astype(np.int64)  # Convert to np.int64
             g = ((rgb_ints >> 8) & 0xFF).astype(np.int64)   # Convert to np.int64
             b = (rgb_ints & 0xFF).astype(np.int64)          # Convert to np.int64
-
+            
             # Convert XYZ and RGB data into PyTorch tensors for further processing
             xyz_tensor = torch.tensor(xyz, dtype=torch.float32)
             rgb_tensor = torch.stack((
@@ -245,7 +245,9 @@ class ROSDataloader(DataLoader):
                 torch.tensor(g, dtype=torch.float32),
                 torch.tensor(b, dtype=torch.float32)
             ), dim=1)
+            device = self.dataset.cameras.device
             xyzrgb_tensor = torch.cat((xyz_tensor, rgb_tensor / 255.0), dim=1)  # Normalize RGB to [0, 1]
+            xyzrgb_tensor = xyzrgb_tensor.to(device)
             self.dataset.update_point_cloud(self.current_idx, xyzrgb_tensor)
             print("saved Lidar points")
             #---------------------------- end of lidar process------------------------------------

@@ -55,6 +55,8 @@ class ROSDataset(InputDataset):
         self.device = device
         self.cameras = self.cameras.to(device=self.device)
 
+        # self.xyzrgb = self.xyzrgb.to(device=self.device)
+
         self.image_tensor = torch.ones(
             self.num_images, self.image_height, self.image_width, 3, dtype=torch.float32
         )

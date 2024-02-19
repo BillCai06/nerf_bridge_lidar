@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import time
 from typing import Type, List, Dict
-
+from typing import Union
 import torch
 
 from nerfstudio.models.splatfacto import (
@@ -97,88 +97,96 @@ class ROSSplatfactoModel(SplatfactoModel):
 
 
 
-def seed_from_xyzrgb(
-    self,
-    camera: Cameras,
-    image_data: Dict[str, torch.Tensor],
-    xyzrgb_tensor: torch.Tensor,
-    optimizers: Optimizers,
-):
-    """
-    Initialize gaussians at points in the point cloud from the xyzrgb data.
+    def seed_from_xyzrgb(
+        self,
+        camera: Cameras,
+        # image_data: Dict[str, torch.Tensor],
+        xyzrgb_tensor: torch.Tensor,
+        optimizers: Optimizers,
+        
+    ):
+        """
+        Initialize gaussians at points in the point cloud from the xyzrgb data.
 
-    Args:
-        camera: Cameras object containing camera parameters.
-        xyzrgb_tensor: Tensor containing XYZ coordinates and RGB values.
-        optimizers: Optimizers for updating gaussians parameters.
-    """
-    if xyzrgb_tensor.device != self.device:
-        xyzrgb_tensor = xyzrgb_tensor.to(self.device)
+        Args:
+            camera: Cameras object containing camera parameters.
+            xyzrgb_tensor: Tensor containing XYZ coordinates and RGB values.
+            optimizers: Optimizers for updating gaussians parameters.
+        """
+        # if xyzrgb_tensor.device != self.device:
+        xyzrgb_tensor = xyzrgb_tensor['xyzrgb'].to(self.device)
+        print(type(xyzrgb_tensor))
+        # print(xyzrgb_tensor['xyzrgb'])
+        print("HERE-------------")
+        # data_item = xyzrgb_tensor[0]  
+        # xyzrgb_tensor = xyzrgb_tensor['xyzrgb']
+        # print(type(xyzrgb_tensor))
 
-    # XYZ coordinates and RGB values
-    xyzs = xyzrgb_tensor[:, :3]
-    rgbs = xyzrgb_tensor[:, 3:]
-    # print("--------------------Got POINTS--------------------")
-    # print(xyzs)
-    # print(rgbs) 
-    # print("--------------------End POINTS--------------------")
-    # Transform XYZ coordinates to world coordinates using camera extrinsics
-    assert len(camera.shape) == 0
-    c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
-    R = c2w[:3, :3]
-    t = c2w[:3, 3].squeeze()
-    xyzs = torch.matmul(xyzs, R.T) + t  # (N, 3)
+        print("------------------------------------------------------------------------")
+        # XYZ coordinates and RGB values
+        xyzs = xyzrgb_tensor[:, :3]
+        rgbs = xyzrgb_tensor[:, 3:]
+        # print("--------------------Got POINTS--------------------")
+        # print(xyzs)
+        # print(rgbs) 
+        # print("--------------------End POINTS--------------------")
+        # Transform XYZ coordinates to world coordinates using camera extrinsics
+        assert len(camera.shape) == 0
+        c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
+        R = c2w[:3, :3]
+        t = c2w[:3, 3].squeeze()
+        xyzs = torch.matmul(xyzs, R.T) + t  # (N, 3)
 
-    # Initialize scales using 3-nearest neighbors average distance.
-    distances, _ = self.k_nearest_sklearn(xyzs.cpu().numpy(), 3)
-    distances = torch.from_numpy(distances).to(self.device)
-    avg_dist = distances.mean(dim=-1, keepdim=True)
-    scales = torch.log(avg_dist.repeat(1, 3))
+        # Initialize scales using 3-nearest neighbors average distance.
+        distances, _ = self.k_nearest_sklearn(xyzs.cpu().numpy(), 3)
+        distances = torch.from_numpy(distances).to(self.device)
+        avg_dist = distances.mean(dim=-1, keepdim=True)
+        scales = torch.log(avg_dist.repeat(1, 3))
 
-    # Initialize quats to random.
-    num_samples = xyzs.size(0)
-    quats = random_quat_tensor(num_samples).to(self.device)
+        # Initialize quats to random.
+        num_samples = xyzs.size(0)
+        quats = random_quat_tensor(num_samples).to(self.device)
 
-    # Initialize SH features to RGB2SH of the points color.
-    dim_sh = num_sh_bases(self.config.sh_degree)
-    shs = torch.zeros((num_samples, dim_sh, 3)).float().to(self.device)
-    if self.config.sh_degree > 0:
-        shs[:, 0, :3] = RGB2SH(rgbs)
-        shs[:, 1:, 3:] = 0.0
-    else:
-        shs[:, 0, :3] = torch.logit(rgbs.clamp(min=1e-6, max=1-1e-6), eps=1e-10)
-    features_dc = shs[:, 0, :]
-    features_rest = shs[:, 1:, :]
+        # Initialize SH features to RGB2SH of the points color.
+        dim_sh = num_sh_bases(self.config.sh_degree)
+        shs = torch.zeros((num_samples, dim_sh, 3)).float().to(self.device)
+        if self.config.sh_degree > 0:
+            shs[:, 0, :3] = RGB2SH(rgbs)
+            shs[:, 1:, 3:] = 0.0
+        else:
+            shs[:, 0, :3] = torch.logit(rgbs.clamp(min=1e-6, max=1-1e-6), eps=1e-10)
+        features_dc = shs[:, 0, :]
+        features_rest = shs[:, 1:, :]
 
-    # Initialize opacities to logit(0.3).
-    opacities = torch.logit(torch.tensor(0.3).repeat(num_samples, 1)).to(self.device)
+        # Initialize opacities to logit(0.3).
+        opacities = torch.logit(torch.tensor(0.3).repeat(num_samples, 1)).to(self.device)
 
-    # Concatenate the new gaussians to the existing ones.
-   
-    self.means = torch.nn.Parameter(torch.cat([self.means.detach(), xyzs], dim=0))
-    self.scales = torch.nn.Parameter(torch.cat([self.scales.detach(), scales], dim=0))
-    self.quats = torch.nn.Parameter(torch.cat([self.quats.detach(), quats], dim=0))
-    self.opacities = torch.nn.Parameter(torch.cat([self.opacities.detach(), opacities], dim=0))
-    self.features_dc = torch.nn.Parameter(torch.cat([self.features_dc.detach(), features_dc], dim=0))
-    self.features_rest = torch.nn.Parameter(torch.cat([self.features_rest.detach(), features_rest], dim=0))
+        # Concatenate the new gaussians to the existing ones.
+    
+        self.means = torch.nn.Parameter(torch.cat([self.means.detach(), xyzs], dim=0))
+        self.scales = torch.nn.Parameter(torch.cat([self.scales.detach(), scales], dim=0))
+        self.quats = torch.nn.Parameter(torch.cat([self.quats.detach(), quats], dim=0))
+        self.opacities = torch.nn.Parameter(torch.cat([self.opacities.detach(), opacities], dim=0))
+        self.features_dc = torch.nn.Parameter(torch.cat([self.features_dc.detach(), features_dc], dim=0))
+        self.features_rest = torch.nn.Parameter(torch.cat([self.features_rest.detach(), features_rest], dim=0))
 
-    # Add the new parameters to the optimizer.
-    for param_group, new_param in self.get_gaussian_param_groups().items():
-        optimizer = optimizers.optimizers[param_group]
-        old_param = optimizer.param_groups[0]["params"][0]
-        param_state = optimizer.state[old_param]
-        added_param_shape = (num_samples, *new_param[0].shape[1:])
-        if "exp_avg" in param_state:
-            param_state["exp_avg"] = torch.cat(
-                [param_state["exp_avg"], torch.zeros(added_param_shape).to(self.device)], dim=0)
-        if "exp_avg_sq" in param_state:
-            param_state["exp_avg_sq"] = torch.cat(
-                [param_state["exp_avg_sq"], torch.zeros(added_param_shape).to(self.device)], dim=0)
+        # Add the new parameters to the optimizer.
+        for param_group, new_param in self.get_gaussian_param_groups().items():
+            optimizer = optimizers.optimizers[param_group]
+            old_param = optimizer.param_groups[0]["params"][0]
+            param_state = optimizer.state[old_param]
+            added_param_shape = (num_samples, *new_param[0].shape[1:])
+            if "exp_avg" in param_state:
+                param_state["exp_avg"] = torch.cat(
+                    [param_state["exp_avg"], torch.zeros(added_param_shape).to(self.device)], dim=0)
+            if "exp_avg_sq" in param_state:
+                param_state["exp_avg_sq"] = torch.cat(
+                    [param_state["exp_avg_sq"], torch.zeros(added_param_shape).to(self.device)], dim=0)
 
-        del optimizer.state[old_param]
-        optimizer.state[new_param[0]] = param_state
-        optimizer.param_groups[0]["params"] = new_param
-        del old_param
+            del optimizer.state[old_param]
+            optimizer.state[new_param[0]] = param_state
+            optimizer.param_groups[0]["params"] = new_param
+            del old_param
 
 
 
