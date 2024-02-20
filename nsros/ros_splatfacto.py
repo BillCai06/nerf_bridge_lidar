@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import time
+import numpy as np
 from typing import Type, List, Dict
 from typing import Union
 import torch
@@ -127,16 +128,23 @@ class ROSSplatfactoModel(SplatfactoModel):
         """
         # if xyzrgb_tensor.device != self.device:
         xyzrgb_tensor = xyzrgb_tensor['xyzrgb'].to(self.device)
-        print(type(xyzrgb_tensor))
+        # print(type(xyzrgb_tensor))
         # print(xyzrgb_tensor['xyzrgb'])
-        print("HERE-------------")
+        # print("HERE-------------")
         # data_item = xyzrgb_tensor[0]  
         # xyzrgb_tensor = xyzrgb_tensor['xyzrgb']
         # print(type(xyzrgb_tensor))
 
-        print("------------------------------------------------------------------------")
+        # print("------------------------------------------------------------------------")
         # XYZ coordinates and RGB values
         xyzs = xyzrgb_tensor[:, :3]
+        
+        red_value=255
+        if xyzrgb_tensor.dtype == torch.float32:
+            red_value = red_value / 255.0
+        xyzrgb_tensor[:, 3] = red_value        # Red component
+        xyzrgb_tensor[:, 4] = 0                # Green component set to 0
+        xyzrgb_tensor[:, 5] = 0                # Blue component set to 0
         rgbs = xyzrgb_tensor[:, 3:]
         # print("--------------------Got POINTS--------------------")
         # print(xyzs)
@@ -147,7 +155,36 @@ class ROSSplatfactoModel(SplatfactoModel):
         c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
         R = c2w[:3, :3]
         t = c2w[:3, 3].squeeze()
-        xyzs = torch.matmul(xyzs, R.T) + t  # (N, 3)
+        # print(type(R))
+        # print(R)
+        # print("---------------------------------------------------------------------------===============================")
+
+        # TF = torch.eye(4, device=R.device)
+        R_rotation = np.array([
+        [0., -1., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        [0., 0., -1.], # Map LiDAR's left (y) to camera's right (x)
+        [1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
+        ])
+        R_rotation = torch.tensor(R_rotation, dtype=torch.float32).to(self.device)
+        # R_rotation = torch.from_numpy(R_rotation).to(self.device)
+        # print(type(R_rotation))
+        # print(R_rotation)
+        # print("---------------------------------------------------------------------------===============================")
+
+        # TF[:3, :3] = R
+        # TF[:3, 3] = t
+        # ############### want to rotate xyz to world###########################3
+        # TF= TF[:, [1, 2, 0, 3]]
+        # TF[:, [0, 2]] *= -1
+
+        # ones = torch.ones((xyzs.shape[0], 1), device=xyzs.device, dtype=xyzs.dtype)
+        # xyzs_homogeneous = torch.cat((xyzs, ones), dim=1)  # Now (N, 4)# Apply transformation
+        # transformed_xyzs = torch.matmul(xyzs_homogeneous, TF.T)  # Transpose T if needed
+        # xyzs = transformed_xyzs[:, :3]
+#
+        #############################################################################
+        xyzs = torch.matmul(xyzs, R_rotation.T) + t  # (N, 3)
+        # xyzs = torch.matmul(xyzs, RT_rotation)
         # If there's a possibility that xyzs could be on a GPU
         if xyzs.is_cuda:
             xyzs = xyzs.cpu()
@@ -181,7 +218,7 @@ class ROSSplatfactoModel(SplatfactoModel):
         # Concatenate the new gaussians to the existing ones.
         # Ensure xyzs is on the same device as self.means
         xyzs = xyzs.to(self.means.device)
-        xyzs = torch.matmul(xyzs, R.T) + t  # (num_seed_points, 3)
+        # xyzs = torch.matmul(xyzs, R.T) + t  # (num_seed_points, 3)
         self.means = torch.nn.Parameter(torch.cat([self.means.detach(), xyzs], dim=0))
         self.scales = torch.nn.Parameter(torch.cat([self.scales.detach(), scales], dim=0))
         self.quats = torch.nn.Parameter(torch.cat([self.quats.detach(), quats], dim=0))
