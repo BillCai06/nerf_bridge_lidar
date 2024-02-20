@@ -177,10 +177,11 @@ class ROSSplatfactoModel(SplatfactoModel):
 
         # Initialize opacities to logit(0.3).
         opacities = torch.logit(torch.tensor(0.3).repeat(num_samples, 1)).to(self.device)
-
+        
         # Concatenate the new gaussians to the existing ones.
         # Ensure xyzs is on the same device as self.means
         xyzs = xyzs.to(self.means.device)
+        xyzs = torch.matmul(xyzs, R.T) + t  # (num_seed_points, 3)
         self.means = torch.nn.Parameter(torch.cat([self.means.detach(), xyzs], dim=0))
         self.scales = torch.nn.Parameter(torch.cat([self.scales.detach(), scales], dim=0))
         self.quats = torch.nn.Parameter(torch.cat([self.quats.detach(), quats], dim=0))

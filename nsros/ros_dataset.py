@@ -45,7 +45,7 @@ class ROSDataset(InputDataset):
         print(self.point_cloud_topic_name)
         # Initialize the tensor to hold XYZRGB data: Assuming the point cloud's maximum size for pre-allocation
         # You might want to adjust the size based on your expected point cloud size or make it dynamic
-        self.max_points = 12000  # Example size, adjust based on your application's needs
+        self.max_points = 13000  # Example size, adjust based on your application's needs
         self.xyzrgb_tensor = torch.zeros(self.num_images, self.max_points,  6,  dtype=torch.float32)
 
        
