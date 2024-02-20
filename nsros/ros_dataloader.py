@@ -29,8 +29,6 @@ from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from geometry_msgs.msg import PoseStamped, PoseArray
 from message_filters import TimeSynchronizer, ApproximateTimeSynchronizer,Subscriber
-import numpy as np
-import torch
 from scipy.spatial.transform import Rotation as R
 
 CONSOLE = Console(width=120)

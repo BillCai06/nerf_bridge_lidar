@@ -34,11 +34,21 @@ class ROSSplatfactoModelConfig(SplatfactoModelConfig):
 
 class ROSSplatfactoModel(SplatfactoModel):
     def __init__(self, *args, **kwargs):
+         # Check if CUDA (GPU support) is available
+        
+            # If CUDA is available, set the device to the first available GPU
+        
+        
+
         super().__init__(*args, **kwargs)
+
+        # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print("Using GPU:", torch.cuda.get_device_name(0))
+        device: Union[torch.device, str] = "cuda:0"
         self.seeded_img_idx = 0
         self.depth_seed_pts = self.config.depth_seed_pts
         self.seed_with_depth = self.config.seed_with_depth
-
+      
         # For some reason this is not set in the base class
         self.vis_counts = None
 
@@ -103,6 +113,8 @@ class ROSSplatfactoModel(SplatfactoModel):
         # image_data: Dict[str, torch.Tensor],
         xyzrgb_tensor: torch.Tensor,
         optimizers: Optimizers,
+        device: Union[torch.device, str] = "cpu",
+        
         
     ):
         """
@@ -136,9 +148,14 @@ class ROSSplatfactoModel(SplatfactoModel):
         R = c2w[:3, :3]
         t = c2w[:3, 3].squeeze()
         xyzs = torch.matmul(xyzs, R.T) + t  # (N, 3)
-
-        # Initialize scales using 3-nearest neighbors average distance.
-        distances, _ = self.k_nearest_sklearn(xyzs.cpu().numpy(), 3)
+        # If there's a possibility that xyzs could be on a GPU
+        if xyzs.is_cuda:
+            xyzs = xyzs.cpu()
+        distances, _ = self.k_nearest_sklearn(xyzs.numpy(), 3)
+                # Initialize scales using 3-nearest neighbors average distance.
+        # distances, _ = self.k_nearest_sklearn(xyzs.cpu().numpy(), 3)
+        # distances, _ = self.k_nearest_sklearn(xyzs.numpy(), 3)
+        # print(self.device)
         distances = torch.from_numpy(distances).to(self.device)
         avg_dist = distances.mean(dim=-1, keepdim=True)
         scales = torch.log(avg_dist.repeat(1, 3))
@@ -162,7 +179,8 @@ class ROSSplatfactoModel(SplatfactoModel):
         opacities = torch.logit(torch.tensor(0.3).repeat(num_samples, 1)).to(self.device)
 
         # Concatenate the new gaussians to the existing ones.
-    
+        # Ensure xyzs is on the same device as self.means
+        xyzs = xyzs.to(self.means.device)
         self.means = torch.nn.Parameter(torch.cat([self.means.detach(), xyzs], dim=0))
         self.scales = torch.nn.Parameter(torch.cat([self.scales.detach(), scales], dim=0))
         self.quats = torch.nn.Parameter(torch.cat([self.quats.detach(), quats], dim=0))
