@@ -10,8 +10,8 @@ from sensor_msgs.msg import PointCloud2, Image
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
-import pcl
-import pcl_ros
+# import pcl
+# import pcl_ros
 import rospy
 from sensor_msgs.msg import PointCloud2, PointField, TimeReference
 import sensor_msgs.point_cloud2 as pc2

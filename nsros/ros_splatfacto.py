@@ -139,12 +139,12 @@ class ROSSplatfactoModel(SplatfactoModel):
         # XYZ coordinates and RGB values
         xyzs = xyzrgb_tensor[:, :3]
         
-        red_value=255
-        if xyzrgb_tensor.dtype == torch.float32:
-            red_value = red_value / 255.0
-        xyzrgb_tensor[:, 3] = red_value        # Red component
-        xyzrgb_tensor[:, 4] = 0                # Green component set to 0
-        xyzrgb_tensor[:, 5] = 0                # Blue component set to 0
+        # red_value=255
+        # if xyzrgb_tensor.dtype == torch.float32:
+        #     red_value = red_value / 255.0
+        # xyzrgb_tensor[:, 3] = red_value        # Red component
+        # xyzrgb_tensor[:, 4] = 0                # Green component set to 0
+        # xyzrgb_tensor[:, 5] = 0                # Blue component set to 0
         rgbs = xyzrgb_tensor[:, 3:]
         # print("--------------------Got POINTS--------------------")
         # print(xyzs)
@@ -160,10 +160,15 @@ class ROSSplatfactoModel(SplatfactoModel):
         # print("---------------------------------------------------------------------------===============================")
 
         # TF = torch.eye(4, device=R.device)
+        # R_rotation = np.array([
+        # [0., 1., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        # [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
+        # [1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
+        # ])
         R_rotation = np.array([
-        [0., -1., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        [0., 0., -1.], # Map LiDAR's left (y) to camera's right (x)
-        [1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
+        [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        [0., -1., 0.], # Map LiDAR's left (y) to camera's right (x)
+        [0., 0., -1.], # Map LiDAR's up (z) to camera's down (y)
         ])
         R_rotation = torch.tensor(R_rotation, dtype=torch.float32).to(self.device)
         # R_rotation = torch.from_numpy(R_rotation).to(self.device)
