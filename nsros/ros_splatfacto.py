@@ -123,6 +123,7 @@ class ROSSplatfactoModel(SplatfactoModel):
         c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
         R = c2w[:3, :3]
         t = c2w[:3, 3].squeeze()
+        # R[:, 1] = 
 
         # TF = torch.eye(4, device=R.device)
         # R_rotation = np.array([
@@ -150,10 +151,26 @@ class ROSSplatfactoModel(SplatfactoModel):
         [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
         [0., -1., 0.], # Map LiDAR's up (z) to camera's down (y)
         ])
+        # x_ccw_180 = np.array([
+        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        # [0., -1., 0.], # Map LiDAR's left (y) to camera's right (x)
+        # [0., 0., -1.], # Map LiDAR's up (z) to camera's down (y)
+        # ])
+        # filp= np.array([
+        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        # [0., 1., 0.], # Map LiDAR's left (y) to camera's right (x)
+        # [0., 0., -1.], # Map LiDAR's up (z) to camera's down (y)
+        # ])
+        # R[1]=-R[1]
+        # R[2]=-R[2]
+        # R[]
         U_new, Sigma_new, VT_new = np.linalg.svd(R.cpu().numpy())
         R_prime_new = np.dot(U_new, VT_new)
         R_prime_y_90 = np.dot(R_prime_new,y_ccw_90)
         R_prime_y_90_z_ccw_90 =  np.dot(R_prime_y_90,x_ccw_90)
+        # R_prime_y_90_z_ccw_90_x_ccw_180 = np.dot(R_prime_y_90_z_ccw_90,x_ccw_180)
+        # print(R_prime_y_90_z_ccw_90.round())
+        # R_prime_y_90_z_ccw_90_flip = np.dot(filp,R_prime_y_90_z_ccw_90)
         # R_combined=np.dot(R_rotation, R_prime_new)
         R_rotation = torch.tensor(R_prime_y_90_z_ccw_90, dtype=torch.float32).to(self.device)
         # R_rotation = torch.from_numpy(R_rotation).to(self.device)
@@ -161,8 +178,10 @@ class ROSSplatfactoModel(SplatfactoModel):
         # ############### want to rotate xyz to world###########################3
         # TF= TF[:, [1, 2, 0, 3]]
         # TF[:, [0, 2]] *= -1
-
-        # ones = torch.ones((xyzs.shape[0], 1), device=xyzs.device, dtype=xyzs.dtype)
+        # [[ 0. -1.  0.]
+        # [ 0.  0.  1.]
+        # [-1.  0.  0.]]
+        # ones = torch.ones((xyzs.shape[0], 1), device=xyzs.device, dtype=xy    zs.dtype)
         # xyzs_homogeneous = torch.cat((xyzs, ones), dim=1)  # Now (N, 4)# Apply transformation
         # transformed_xyzs = torch.matmul(xyzs_homogeneous, TF.T)  # Transpose T if needed
         # xyzs = transformed_xyzs[:, :3]
@@ -170,18 +189,14 @@ class ROSSplatfactoModel(SplatfactoModel):
         #############################################################################
         #
         # Transform y and z: x stays the same, y and z are multiplied by -1
-        print("--------------------xyzs POINTS--------------------")
-        print(xyzs)
+        print("--------------------R_prime_y_90_z_ccw_90 POINTS--------------------")
+        print(R_prime_y_90_z_ccw_90.round())
         print("--------------------end POINTS--------------------")
-        # xyzs[:, 1] = -xyzs[:, 1]  # Negate y
-        # xyzs[:, 2] = -xyzs[:, 2]  # Negate z
-        print("--------------------after POINTS--------------------")
-        print(xyzs)
-        print("--------------------end POINTS--------------------")
-        xyzs = torch.matmul(xyzs, R_rotation) + t  # (N, 3)
-        # xyzs = torch.matmul(xyzs, R.T) # (N, 3)
-        # xyzs = torch.matmul(xyzs, RT_rotation)
-        # If there's a possibility that xyzs could be on a GPU
+        # xyzs[:, 0] = -xyzs[:, 0]  # Negate x
+        xyzs[:, 1] = -xyzs[:, 1]  # Negate ys
+        xyzs = torch.matmul(xyzs, R_rotation.T) + t  # Rotate 
+        xyzs[:, 1] = -xyzs[:, 1]  # filp y again
+        
         if xyzs.is_cuda:
             xyzs = xyzs.cpu()
         distances, _ = self.k_nearest_sklearn(xyzs.numpy(), 3)
@@ -242,130 +257,6 @@ class ROSSplatfactoModel(SplatfactoModel):
 
 
 
-
-    def seed_from_rgbd(
-        self,
-        camera: Cameras,
-        image_data: Dict[str, torch.Tensor],
-        optimizers: Optimizers,
-    ):
-        """
-        Initialize gaussians at random points in the point cloud from the depth image.
-
-        Means - Initialized to projected points in the depth image.
-        Scales - Initialized using k-nearest neighbors approach (same as splatfacto).
-        Quats - Initialized to random (same as splatfacto).
-        Opacities - Initialized to logit(0.1) (same as splatfacto).
-        Features_SH - Initialized to RGB2SH of the points color.
-        """
-        depth = image_data["depth"]
-        rgb = image_data["image"]
-        H, W, _ = image_data["depth"].shape
-        if rgb.device != self.device or depth.device != self.device:
-            depth = depth.to(self.device)
-            rgb = rgb.to(self.device)
-
-        # Get camera intrinsics and extrinsics
-        assert len(camera.shape) == 0
-        assert H == camera.image_height.item() and W == camera.image_width.item()
-        fx, fy = camera.fx[0].item(), camera.fy[0].item()
-        cx, cy = camera.cx[0].item(), camera.cy[0].item()
-        c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
-        R = c2w[:3, :3]
-        t = c2w[:3, 3].squeeze()
-
-        # Sample pixel indices
-        # Could use a confidence map here if available
-        nz_row, nz_col = torch.where(depth.squeeze() > 0)
-        num_samples = min(self.depth_seed_pts, nz_row.shape[0])
-        ind_mask = torch.randperm(nz_row.shape[0])[:num_samples]
-        x = nz_col[ind_mask].to(self.device).reshape((-1, 1))
-        y = nz_row[ind_mask].to(self.device).reshape((-1, 1))
-        rgbs = rgb[y, x, :]  # (num_seed_points, 3)
-        rgbs = rgbs.squeeze()
-
-        # Sample depth pixels and project to 3D coordinates (camera relative).
-        z = depth[y, x]
-        z = z.reshape((-1, 1))  # (num_seed_points, 1)
-        x = (x - cx) * z / fx
-        y = (y - cy) * z / fy 
-
-        # Flip y and z to switch to opengl coordinate system.
-        xyzs = torch.stack([x, -y, -z], dim=-1).squeeze()  # (num_seed_points, 3)
-
-        # Transform camera relative 3D coordinates to world coordinates.
-        xyzs = torch.matmul(xyzs, R.T) + t  # (num_seed_points, 3)
-
-        # Initialize scales using 3-nearest neighbors average distance.
-        distances, _ = self.k_nearest_sklearn(xyzs, 3)
-        distances = torch.from_numpy(distances).to(self.device)
-        avg_dist = distances.mean(dim=-1, keepdim=True)
-        scales = torch.log(avg_dist.repeat(1, 3))
-
-        # Initialize quats to random.
-        quats = random_quat_tensor(self.depth_seed_pts).to(self.device)
-
-        # Initialize SH features to RGB2SH of the points color.
-        dim_sh = num_sh_bases(self.config.sh_degree)
-        shs = torch.zeros((self.depth_seed_pts, dim_sh, 3)).float().to(self.device)
-        if self.config.sh_degree > 0:
-            shs[:, 0, :3] = RGB2SH(rgbs)
-            shs[:, 1:, 3:] = 0.0
-        else:
-            shs[:, 0, :3] = torch.logit(rgbs, eps=1e-10)
-        features_dc = shs[:, 0, :]
-        features_rest = shs[:, 1:, :]
-
-        # Initialize opacities to logit(0.3). This is sort of our opacity prior.
-        # Nerfstudio uses a opacity prior of 0.1.
-        opacities = torch.logit(0.3 * torch.ones(self.depth_seed_pts, 1)).to(
-            self.device
-        )
-
-        # Concatenate the new gaussians to the existing ones.
-        
-        self.means = torch.nn.Parameter(torch.cat([self.means.detach(), xyzs], dim=0))
-        self.scales = torch.nn.Parameter(
-            torch.cat([self.scales.detach(), scales], dim=0)
-        )
-        self.quats = torch.nn.Parameter(torch.cat([self.quats.detach(), quats], dim=0))
-        self.opacities = torch.nn.Parameter(
-            torch.cat([self.opacities.detach(), opacities], dim=0)
-        )
-        self.features_dc = torch.nn.Parameter(
-            torch.cat([self.features_dc.detach(), features_dc], dim=0)
-        )
-        self.features_rest = torch.nn.Parameter(
-            torch.cat([self.features_rest.detach(), features_rest], dim=0)
-        )
-
-        # Add the new parameters to the optimizer.
-        for param_group, new_param in self.get_gaussian_param_groups().items():
-            optimizer = optimizers.optimizers[param_group]
-            old_param = optimizer.param_groups[0]["params"][0]
-            param_state = optimizer.state[old_param]
-            added_param_shape = (self.depth_seed_pts, *new_param[0].shape[1:])
-            if "exp_avg" in param_state:
-                param_state["exp_avg"] = torch.cat(
-                    [
-                        param_state["exp_avg"],
-                        torch.zeros(added_param_shape).to(self.device),
-                    ],
-                    dim=0,
-                )
-            if "exp_avg_sq" in param_state:
-                param_state["exp_avg_sq"] = torch.cat(
-                    [
-                        param_state["exp_avg_sq"],
-                        torch.zeros(added_param_shape).to(self.device),
-                    ],
-                    dim=0,
-                )
-
-            del optimizer.state[old_param]
-            optimizer.state[new_param[0]] = param_state
-            optimizer.param_groups[0]["params"] = new_param
-            del old_param
 
     def get_training_callbacks(
         self, training_callback_attributes: TrainingCallbackAttributes

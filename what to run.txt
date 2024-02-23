@@ -7,3 +7,7 @@ rosbag play --clock --loop ~/data/rosbag/working_d/new32line02-12.bag
 conda deactivate
 python3 ~/catkin_ws/src/odometry_to_camera_pose/scripts/odom_to_camera_pose.py 
 python3 ~/catkin_ws/src/odometry_to_camera_pose/scripts/lidar.py 
+
+
+conda activate nerfstudio
+python3 ros_train.py
