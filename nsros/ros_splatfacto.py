@@ -35,22 +35,12 @@ class ROSSplatfactoModelConfig(SplatfactoModelConfig):
 
 class ROSSplatfactoModel(SplatfactoModel):
     def __init__(self, *args, **kwargs):
-         # Check if CUDA (GPU support) is available
-        
-            # If CUDA is available, set the device to the first available GPU
-        
-        
-
         super().__init__(*args, **kwargs)
-
-        # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         print("Using GPU:", torch.cuda.get_device_name(0))
         device: Union[torch.device, str] = "cuda:0"
         self.seeded_img_idx = 0
         self.depth_seed_pts = self.config.depth_seed_pts
         self.seed_with_depth = self.config.seed_with_depth
-      
-        # For some reason this is not set in the base class
         self.vis_counts = None
 
     def seed_cb(self, pipeline: Pipeline, optimizers: Optimizers, step: int):
@@ -58,10 +48,6 @@ class ROSSplatfactoModel(SplatfactoModel):
         if not pipeline.datamanager.train_image_dataloader.listen_depth:
             print("not listen_depth ")
             return
-        print("-===================================listen_depth =======================")
-        # if not self.seed_with_depth:
-        #     return
-
         ds_latest_idx = pipeline.datamanager.train_image_dataloader.current_idx
         if self.seeded_img_idx < ds_latest_idx:
             start_idx = 0 if self.seeded_img_idx == 0 else self.seeded_img_idx + 1
@@ -69,19 +55,17 @@ class ROSSplatfactoModel(SplatfactoModel):
             pre_gaussian_count = self.means.shape[0]
             for idx in seed_image_idxs:
                 image_data = pipeline.datamanager.train_dataset[idx]
-                print(f"Contents of train_dataset at index {idx}:")
-                for key, value in image_data.items():
-                    # For tensor data, print its shape and data type
-                    if isinstance(value, torch.Tensor):
-                        print(f"{key}: shape = {value.shape}, dtype = {value.dtype}")
-                    else:
-                        print(f"{key}: {value}")
+                # print(f"Contents of train_dataset at index {idx}:")
+                # for key, value in image_data.items():
+                #     # For tensor data, print its shape and data type
+                #     if isinstance(value, torch.Tensor):
+                #         # print(f"{key}: shape = {value.shape}, dtype = {value.dtype}")
+                #     else:
+                #         # print(f"{key}: {value}")
 
                 # If you also need to inspect the camera object:
                 camera = pipeline.datamanager.train_dataset.cameras[idx]
-                print(f"Camera data at index {idx}: {camera}")
-
-                # camera = pipeline.datamanager.train_dataset.cameras[idx]
+                # print(f"Camera data at index {idx}: {camera}")
                 with torch.no_grad():
                     self.seed_from_xyzrgb(camera, image_data ,optimizers)
                 self.seeded_img_idx = idx
@@ -128,23 +112,7 @@ class ROSSplatfactoModel(SplatfactoModel):
         """
         # if xyzrgb_tensor.device != self.device:
         xyzrgb_tensor = xyzrgb_tensor['xyzrgb'].to(self.device)
-        # print(type(xyzrgb_tensor))
-        # print(xyzrgb_tensor['xyzrgb'])
-        # print("HERE-------------")
-        # data_item = xyzrgb_tensor[0]  
-        # xyzrgb_tensor = xyzrgb_tensor['xyzrgb']
-        # print(type(xyzrgb_tensor))
-
-        # print("------------------------------------------------------------------------")
-        # XYZ coordinates and RGB values
         xyzs = xyzrgb_tensor[:, :3]
-        
-        # red_value=255
-        # if xyzrgb_tensor.dtype == torch.float32:
-        #     red_value = red_value / 255.0
-        # xyzrgb_tensor[:, 3] = red_value        # Red component
-        # xyzrgb_tensor[:, 4] = 0                # Green component set to 0
-        # xyzrgb_tensor[:, 5] = 0                # Blue component set to 0
         rgbs = xyzrgb_tensor[:, 3:]
         # print("--------------------Got POINTS--------------------")
         # print(xyzs)
@@ -155,9 +123,6 @@ class ROSSplatfactoModel(SplatfactoModel):
         c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
         R = c2w[:3, :3]
         t = c2w[:3, 3].squeeze()
-        # print(type(R))
-        # print(R)
-        # print("---------------------------------------------------------------------------===============================")
 
         # TF = torch.eye(4, device=R.device)
         # R_rotation = np.array([
@@ -165,19 +130,34 @@ class ROSSplatfactoModel(SplatfactoModel):
         # [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
         # [1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
         # ])
-        R_rotation = np.array([
-        [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        [0., -1., 0.], # Map LiDAR's left (y) to camera's right (x)
-        [0., 0., -1.], # Map LiDAR's up (z) to camera's down (y)
+        # R_rotation = np.array([
+        # [0, -1., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        # [0., 0., -1.], # Map LiDAR's left (y) to camera's right (x)
+        # [-1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
+        # ])
+        # R_rotation = np.array([
+        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        # [0., 1., 0.], # Map LiDAR's left (y) to camera's right (x)
+        # [0., 0., 1.], # Map LiDAR's up (z) to camera's down (y)
+        # ])
+        y_ccw_90 = np.array([
+        [0., 0., 1.],  # Map LiDAR's forward (x) to camera's forward (z)
+        [0., 1., 0.], # Map LiDAR's left (y) to camera's right (x)
+        [-1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
         ])
-        R_rotation = torch.tensor(R_rotation, dtype=torch.float32).to(self.device)
+        x_ccw_90 = np.array([
+        [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
+        [0., -1., 0.], # Map LiDAR's up (z) to camera's down (y)
+        ])
+        U_new, Sigma_new, VT_new = np.linalg.svd(R.cpu().numpy())
+        R_prime_new = np.dot(U_new, VT_new)
+        R_prime_y_90 = np.dot(R_prime_new,y_ccw_90)
+        R_prime_y_90_z_ccw_90 =  np.dot(R_prime_y_90,x_ccw_90)
+        # R_combined=np.dot(R_rotation, R_prime_new)
+        R_rotation = torch.tensor(R_prime_y_90_z_ccw_90, dtype=torch.float32).to(self.device)
         # R_rotation = torch.from_numpy(R_rotation).to(self.device)
-        # print(type(R_rotation))
-        # print(R_rotation)
-        # print("---------------------------------------------------------------------------===============================")
 
-        # TF[:3, :3] = R
-        # TF[:3, 3] = t
         # ############### want to rotate xyz to world###########################3
         # TF= TF[:, [1, 2, 0, 3]]
         # TF[:, [0, 2]] *= -1
@@ -188,7 +168,18 @@ class ROSSplatfactoModel(SplatfactoModel):
         # xyzs = transformed_xyzs[:, :3]
 #
         #############################################################################
-        xyzs = torch.matmul(xyzs, R_rotation.T) + t  # (N, 3)
+        #
+        # Transform y and z: x stays the same, y and z are multiplied by -1
+        print("--------------------xyzs POINTS--------------------")
+        print(xyzs)
+        print("--------------------end POINTS--------------------")
+        # xyzs[:, 1] = -xyzs[:, 1]  # Negate y
+        # xyzs[:, 2] = -xyzs[:, 2]  # Negate z
+        print("--------------------after POINTS--------------------")
+        print(xyzs)
+        print("--------------------end POINTS--------------------")
+        xyzs = torch.matmul(xyzs, R_rotation) + t  # (N, 3)
+        # xyzs = torch.matmul(xyzs, R.T) # (N, 3)
         # xyzs = torch.matmul(xyzs, RT_rotation)
         # If there's a possibility that xyzs could be on a GPU
         if xyzs.is_cuda:

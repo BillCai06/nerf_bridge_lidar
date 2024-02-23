@@ -187,7 +187,7 @@ class ROSDataloader(DataLoader):
         ):
             # ----------------- Handling the IMAGE ----------------
             # Load the image message directly into the torch
-            print("-------------image index: ",self.current_idx,"----------------------")
+            # print("-------------image index: ",self.current_idx,"----------------------")
             im_tensor = torch.frombuffer(image.data, dtype=torch.uint8).reshape(
                 self.H, self.W, -1
             )
@@ -246,7 +246,7 @@ class ROSDataloader(DataLoader):
             xyzrgb_tensor = torch.cat((xyz_tensor, rgb_tensor / 255.0), dim=1)  # Normalize RGB to [0, 1]
             xyzrgb_tensor = xyzrgb_tensor.to(device)
             self.dataset.update_point_cloud(self.current_idx, xyzrgb_tensor)
-            print("saved Lidar points")
+            # print("saved Lidar points")
             #---------------------------- end of lidar process------------------------------------
             self.updated = True
             self.current_idx += 1

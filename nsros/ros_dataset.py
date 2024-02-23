@@ -101,7 +101,7 @@ class ROSDataset(InputDataset):
                 padded_data = torch.zeros((self.max_points, xyzrgb_data.shape[1]), dtype=xyzrgb_data.dtype, device=xyzrgb_data.device)
                 padded_data[:xyzrgb_data.shape[0], :] = xyzrgb_data
                 self.xyzrgb_tensor[idx] = padded_data
-                print("Feed lidar data to idx with padding",idx," with shape:",self.xyzrgb_tensor[idx].shape[0])
+                # print("Feed lidar data to idx with padding",idx," with shape:",self.xyzrgb_tensor[idx].shape[0])
 
             else:
                 # Directly assign the data if it matches the expected size
