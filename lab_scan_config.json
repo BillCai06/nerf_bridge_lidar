@@ -1,0 +1,14 @@
+{
+    "camera_model": "PINHOLE",
+    "fx": 532.9841918945312,
+    "fy": 532.9841918945312,
+    "cx": 550.3889770507812,
+    "cy": 303.86602783203125,
+    "W": 1104,
+    "H": 621,
+    "num_images": 500,
+    "point_cloud_topic": "/transformed_points",
+    "image_topic": "/zed_node/rgb/image_rect_color",
+    "pose_topic": "/pose",
+    "depth_scale_factor": 1e-3
+}
