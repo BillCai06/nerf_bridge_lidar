@@ -210,11 +210,11 @@ class ROSSplatfactoModel(SplatfactoModel):
         # t[2] = torch.tensor(0.5300, device=self.device)
         # t[2] = t[2] -t[2]# invert z on T
         # t[1] = -t[1] # invert z on T
-        t[2] = -t[2] # invert z on T
+        # t[2] = -t[2] # invert z on T
         # print(t[2])
         # t[0] = torch.tensor(0.00, device=self.device)
         xyzs =torch.matmul(xyzs, R_rotation.T) + t  # Rotate 
-        xyzs=torch.matmul(xyzs, R_T)
+        # xyzs=torch.matmul(xyzs, R_T)
         # xyzs = torch.matmul(xyzs, R_flip)
         # xyzs[:, 1] = -xyzs[:, 1]  # filp y again
         # xyzs[:, 2] = -xyzs[:, 2]  # filp z again
