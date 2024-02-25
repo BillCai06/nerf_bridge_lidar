@@ -9,8 +9,8 @@ import viser
 import viser.theme
 import viser.transforms as vtf
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# import matplotlib.pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
 from nerfstudio.models.splatfacto import (
     SplatfactoModel,
     SplatfactoModelConfig,
@@ -29,16 +29,16 @@ from nerfstudio.cameras.cameras import Cameras
 
 import pdb
 
-def plot_axes(ax, matrix, origin, label_prefix, color):
-    # Extract rotation part of the matrix
-    R = matrix[:3, :3]
-    # Define unit vectors for axes
-    unit_vectors = np.eye(3)
-    # Transform unit vectors
-    transformed_vectors = np.dot(R, unit_vectors)
-    # Plot axes
-    for i, vec in enumerate(transformed_vectors.T):
-        ax.quiver(origin[0], origin[1], origin[2], vec[0], vec[1], vec[2], length=0.2, color=color[i], linewidth=2, label=f'{label_prefix}{["X", "Y", "Z"][i]}')
+# def plot_axes(ax, matrix, origin, label_prefix, color):
+#     # Extract rotation part of the matrix
+#     R = matrix[:3, :3]
+#     # Define unit vectors for axes
+#     unit_vectors = np.eye(3)
+#     # Transform unit vectors
+#     transformed_vectors = np.dot(R, unit_vectors)
+#     # Plot axes
+#     for i, vec in enumerate(transformed_vectors.T):
+#         ax.quiver(origin[0], origin[1], origin[2], vec[0], vec[1], vec[2], length=0.2, color=color[i], linewidth=2, label=f'{label_prefix}{["X", "Y", "Z"][i]}')
 
 
 @dataclass
@@ -60,8 +60,8 @@ class ROSSplatfactoModel(SplatfactoModel):
         self.seed_with_depth = self.config.seed_with_depth
         self.vis_counts = None
         self.inter=0
-        self.fig = plt.figure(figsize=(10, 8))
-        self.ax = self.fig.add_subplot(111, projection='3d')
+        # self.fig = plt.figure(figsize=(10, 8))
+        # self.ax = self.fig.add_subplot(111, projection='3d')
     
     def seed_cb(self, pipeline: Pipeline, optimizers: Optimizers, step: int):
         
@@ -134,8 +134,8 @@ class ROSSplatfactoModel(SplatfactoModel):
         # ax = fig.add_subplot(111, projection='3d')
         # Define colors for the original and transformed axes
         # Define colors for the original and transformed axes
-        original_colors = ['r', 'g', 'b']  # RGB for XYZ axes
-        transformed_colors = ['c', 'm', 'y']  # CMY for transformed XYZ axes
+        # original_colors = ['r', 'g', 'b']  # RGB for XYZ axes
+        # transformed_colors = ['c', 'm', 'y']  # CMY for transformed XYZ axes
         # Plot original Y-up axes (assuming identity matrix for original orientation)
         # Plot original Y-up axes (assuming identity matrix for original orientation)
 
@@ -143,7 +143,7 @@ class ROSSplatfactoModel(SplatfactoModel):
         #                                     [0, 0, 1, 0],
         #                                     [0, -1, 0, 0],
         #                                     [0, 0, 0, 1]], dtype=torch.float32, device='cuda:0')
-        plot_axes(self.ax,np.eye(4), [0, 0, 0], 'Z-up ', original_colors)
+        # plot_axes(self.ax,np.eye(4), [0, 0, 0], 'Z-up ', original_colors)
         # if xyzrgb_tensor.device != self.device:
         xyzrgb_tensor = xyzrgb_tensor['xyzrgb'].to(self.device)
         xyzs = xyzrgb_tensor[:, :3]
@@ -158,8 +158,11 @@ class ROSSplatfactoModel(SplatfactoModel):
         # Transform XYZ coordinates to world coordinates using camera extrinsics
         assert len(camera.shape) == 0
         c2w = camera.camera_to_worlds.to(self.device)  # (3, 4)
-        # R = c2w[:3, :3]
-        # t = c2w[:3, 3].squeeze()
+        R = c2w[:3, :3]
+        t = c2w[:3, 3].squeeze()
+        if t[2] == torch.tensor(0.0, device=self.device):
+            print("pass empty pose")
+            pass
                 # Define the rotation matrix for a 180 degree rotation around the x-axis
         # Rx_pi = torch.tensor([
         #     [1, 0, 0],
@@ -167,118 +170,13 @@ class ROSSplatfactoModel(SplatfactoModel):
         #     [0, np.sin(np.pi), np.cos(np.pi)]
         # ], dtype=torch.float).to(self.device) 
         
-        T = np.array([
-                    [1, 0, 0, 0],
-                    [0, -1, 0, 0],
-                    [0, 0, -1, 0],
-                    [0, 0, 0, 1]
-                    ])
-        # T2 = np.array([
-        #             [0, 1, 0, 0],
-        #             [-1, 0, 1, 0],
-        #             [0, 0, 1, 0],
-        #             [0, 0, 0, 1]
-        #             ])
-        # T3 = np.array([[1, 0, 0, 0],
-        #             [0, 0, 1, 0],
-        #             [0, -1, 0, 0],
-        #             [0, 0, 0, 1]
-        #             ])
-        
-        T_torch = torch.tensor(T, dtype=torch.float32, device=self.device)
-        # # T2_torch = torch.tensor(T2, dtype=torch.float32, device=self.device)
-        # # T3_torch = torch.tensor(T3, dtype=torch.float32, device=self.device)
-        c2w_homogeneous = torch.cat([c2w, torch.tensor([[0, 0, 0, 1]], device=self.device)], dim=0)
-        transformed_c2w = torch.matmul(T_torch, c2w_homogeneous)
-        # # transformed_c2w = torch.matmul(T2_torch, transformed_c2w)
-        # # transformed_c2w = torch.matmul(T3_torch, transformed_c2w)
+        T = np.array([[1, 0, 0],
+                    [0, -1, 0],
+                    [0, 0, -1]])
+                    
        
-        R = transformed_c2w[:3, :3]
-        t = transformed_c2w[:3, 3].squeeze()
-        # R = torch.tensor(R, dtype=torch.float32).to(self.device)
-        # xyzs_r = torch.matmul(xyzs, R.T) + t  # Rotate 
-
         
         
-        # points_y_up = np.dot(R.cpu().numpy(), )
-        # points_y_up_x_inv=np.dot(points_y_up,reflection_matrix)
-        # points_inv_rot=np.dot(points_y_up,rot_matrix)
-        # xyzs = xyzs
-
-
-        # inter = inter+1
-        # plot_axes(self.ax, R, t, 'Camera ', transformed_colors)
-        # # # Assuming xyzrgb_tensor is your tensor of 3D points
-        # xyzs_view = xyzs.cpu().numpy()  # Convert to NumPy array if it's a tensor  
-        # xyzs_r_view = (xyzs_r).cpu().numpy()  # Convert to NumPy array if it's a tensor  
-        # rgbs_view =rgbs.cpu().numpy()
-        # self.ax.scatter(xyzs_r_view[:, 0], xyzs_r_view[:, 1], xyzs_r_view[:, 2], c=rgbs_view, marker='.', s=1)  # Use a small size for a large number of points
-        # self.ax.scatter(xyzs_view[:, 0], xyzs_view[:, 1], xyzs_view[:, 2], c=rgbs_view, marker='.', s=1)  # Use a small size for a large number of points
-        # max_range = np.array([xyzs[:, 0].max()-xyzs[:, 0].min(), xyzs[:, 1].max()-xyzs[:, 1].min(), xyzs[:, 2].max()-xyzs[:, 2].min()]).max() / 2.0
-        # mid_x = (xyzs[:, 0].max()+xyzs[:, 0].min()) * 0.5
-        # mid_y = (xyzs[:, 1].max()+xyzs[:, 1].min()) * 0.5
-        # mid_z = (xyzs[:, 2].max()+xyzs[:, 2].min()) * 0.5
-
-        # self.ax.set_xlim(mid_x - max_range, mid_x + max_range)
-        # self.ax.set_ylim(mid_y - max_range, mid_y + max_range)
-        # self.ax.set_zlim(mid_z - max_range, mid_z + max_range)
-        #         # Set labels and show plot
-        # if self.inter == 1:
-        #     # Annotation for +X direction (look-at)
-        #     self.ax.text(1, 0, 0, "+X (Look-at)", color='red')
-
-        #     # Annotation for -X direction (back)
-        #     self.ax.text(-1, 0, 0, "-X (Back)", color='red')
-
-        #     # Annotation for +Z direction (up)
-        #     self.ax.text(0, 0, 1, "+Z (Up)", color='blue')
-
-        #     # Annotation for +Y direction (left - assuming left from the viewer's perspective)
-        #     self.ax.text(0, 1, 0, "+Y (Left)", color='green')
-
-        #     self.ax.set_xlabel('X axis')
-        #     self.ax.set_ylabel('Y axis')
-        #     self.ax.set_zlabel('Z axis')
-        #     plt.title('Original Y-up and Transformed Z-up Coordinate Systems')
-        #     plt.show()
-        #     self.inter = 0
-        # else:
-        #     self.inter += 1  # Increment the counter
-        
-        # R_new = R
-        # R_new[:,2] = R[:,1]
-        # R_new[:,1] = R[:,2]
-        # print(R,R_new)
-        # t_new = t
-        # t[2] = t[1]
-        # t[1] = t[2]
-        # print(t,t_new)
-        # R[:, 1] = 
-        # rotation_matrix_z_up = np.array([
-        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        # [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
-        # [0., 1., 0.], # Map LiDAR's up (z) to camera's down (y)
-        # ])
-    
-        # # Convert R and t to Z-up
-        # R_z_up = np.dot(rotation_matrix_z_up, R.cpu().numpy())  # Rotate R
-        # t_z_up = np.dot(rotation_matrix_z_up, t.cpu().numpy())  # Rotate t
-        #     # TF = torch.eye(4, device=R.device)
-        # R_rotation = np.array([
-        # [0., 1., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        # [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
-        # [1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
-        # ])
-        # R_rotation = np.array([
-        # [0, -1., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        # [0., 0., -1.], # Map LiDAR's left (y) to camera's right (x)
-        # [-1., 0., 0.], # Map LiDAR's up (z) to camera's down (y)
-        # ])
-        # R_rotation = np.array([
-        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        # [0., 1., 0.], # Map LiDAR's left (y) to camera's right (x)
-        # [0., 0., 1.], # Map LiDAR's up (z) to camera's down (y)
-        # ])
         y_ccw_90 = np.array([
         [0., 0., -1.],  # Map LiDAR's forward (x) to camera's forward (z)
         [0., 1., 0.], # Map LiDAR's left (y) to camera's right (x)
@@ -289,57 +187,37 @@ class ROSSplatfactoModel(SplatfactoModel):
         [0., 0., 1.], # Map LiDAR's left (y) to camera's right (x)
         [0., -1., 0.], # Map LiDAR's up (z) to camera's down (y)
         ])
-        # x_ccw_180 = np.array([
-        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        # [0., -1., 0.], # Map LiDAR's left (y) to camera's right (x)
-        # [0., 0., -1.], # Map LiDAR's up (z) to camera's down (y)
-        # ])
-        # filp= np.array([
-        # [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
-        # [0., 1., 0.], # Map LiDAR's left (y) to camera's right (x)
-        # [0., 0., -1.], # Map LiDAR's up (z) to camera's down (y)
-        # ])
-        # R[1]=-R[1]
-        # R[2]=-R[2]
-        # # R[]
-        U_new, Sigma_new, VT_new = np.linalg.svd(R.cpu().numpy())
-        R_prime_new = np.dot(U_new, VT_new)
-        R_prime_y_90 = np.dot(R_prime_new,y_ccw_90)
+        flip = np.array([
+        [1., 0., 0.],  # Map LiDAR's forward (x) to camera's forward (z)
+        [0., -1., 0.], # Map LiDAR's left (y) to camera's right (x)
+        [0., 0., 1.], # Map LiDAR's up (z) to camera's down (y)
+        ])
+        R_T = torch.tensor(T, dtype=torch.float32).to(self.device)
+        
+        # U_new, Sigma_new, VT_new = np.linalg.svd(R.cpu().numpy())
+        # R_prime_new = np.dot(U_new, VT_new)
+        R_prime_y_90 = np.dot(R.cpu().numpy(),y_ccw_90)
         R_prime_y_90_z_ccw_90 =  np.dot(R_prime_y_90,x_ccw_90)
-        # R_prime_y_90_z_ccw_90_x_ccw_180 = np.dot(R_prime_y_90_z_ccw_90,x_ccw_180)
-        # print(R_prime_y_90_z_ccw_90.round())
-        # R_prime_y_90_z_ccw_90_flip = np.dot(filp,R_prime_y_90_z_ccw_90)
-        # R_combined=np.dot(R_rotation, R_prime_new)
-        # t_z_up = torch.tensor(t_z_up, dtype=torch.float32).to(self.device)
-        R_rotation = torch.tensor(R_prime_y_90_z_ccw_90, dtype=torch.float32).to(self.device)
-        # R_rotation = torch.from_numpy(R_rotation).to(self.device)
-
-        # ############### want to rotate xyz to world###########################3
-        # TF= TF[:, [1, 2, 0, 3]]
-        # TF[:, [0, 2]] *= -1
-        # [[ 0. -1.  0.]
-        # [ 0.  0.  1.]
-        # [-1.  0.  0.]]
-        # ones = torch.ones((xyzs.shape[0], 1), device=xyzs.device, dtype=xy    zs.dtype)
-        # xyzs_homogeneous = torch.cat((xyzs, ones), dim=1)  # Now (N, 4)# Apply transformation
-        # transformed_xyzs = torch.matmul(xyzs_homogeneous, TF.T)  # Transpose T if needed
-        # xyzs = transformed_xyzs[:, :3]
-#
-        #############################################################################
-        #
-        # # Transform y and z: x stays the same, y and z are multiplied by -1
-        # print("--------------------R_prime_y_90_z_ccw_90 POINTS--------------------")
-        # print(R_prime_y_90_z_ccw_90.round())
-        # print("--------------------end POINTS--------------------")
-        # xyzs[:, 0] = -xyzs[:, 0]  # Negate x
-        # xyzs[:, 1] = -xyzs[:, 1]  # Negate ys
+        R_prime_y_90_z_ccw_90_flip =  np.dot(R_prime_y_90_z_ccw_90,flip)
+      
+        R_rotation = torch.tensor(R_prime_y_90_z_ccw_90_flip, dtype=torch.float32).to(self.device)
+       
 
         xyzs[:, 1] = -xyzs[:, 1]  # Negate ys
         xyzs[:, 2] = -xyzs[:, 2]  # Negate zs
-        t[2] = -t[2]
-        # t[1] = -t[1]
-        xyzs = torch.matmul(xyzs, R_rotation.T) + t  # Rotate 
-        xyzs[:, 1] = -xyzs[:, 1]  # filp y again
+        # t[2] = t[2]-0.52 # invert z on T
+        # t[0] = t[0]-1.5
+        # t[2] = torch.tensor(0.5300, device=self.device)
+        # t[2] = t[2] -t[2]# invert z on T
+        # t[1] = -t[1] # invert z on T
+        t[2] = -t[2] # invert z on T
+        # print(t[2])
+        # t[0] = torch.tensor(0.00, device=self.device)
+        xyzs =torch.matmul(xyzs, R_rotation.T) + t  # Rotate 
+        xyzs=torch.matmul(xyzs, R_T)
+        # xyzs = torch.matmul(xyzs, R_flip)
+        # xyzs[:, 1] = -xyzs[:, 1]  # filp y again
+        # xyzs[:, 2] = -xyzs[:, 2]  # filp z again
         # xyzs[1] = -xyzs[1]
         # xyzs[2] = -xyzs[2]
         # # xyzs = torch.stack([x, -y, -z], dim=-1).squeeze()  # (num_seed_points, 3)

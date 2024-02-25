@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/docker/nerf_bridge_lidar/catkin_ws/devel/setup.sh

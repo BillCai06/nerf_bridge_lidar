@@ -28,7 +28,7 @@ from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from geometry_msgs.msg import PoseStamped, PoseArray
 from message_filters import TimeSynchronizer, ApproximateTimeSynchronizer,Subscriber
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation 
 
 CONSOLE = Console(width=120)
 
@@ -36,46 +36,67 @@ CONSOLE = Console(width=120)
 # does not apply in this case.
 warnings.filterwarnings("ignore", "The given buffer")
 
+def ros_pose_to_homogenous(pose_message: PoseStamped):
+    """
+    Converts a ROS2 Pose message to a 4x4 homogenous transformation matrix
+    as a torch tensor (half precision).
+    """
+    quat = pose_message.pose.orientation
+    pose = pose_message.pose.position
 
+    R = Rotation.from_quat([quat.x, quat.y, quat.z, quat.w]).as_matrix()
+    t = torch.Tensor([pose.x, pose.y, pose.z])
+
+    T = torch.eye(4)
+    T[:3, :3] = torch.from_numpy(R)
+    T[:3, 3] = t
+    return T.to(dtype=torch.float32)
 
 def ros_pose_to_nerfstudio(pose: PoseStamped, static_transform=None):
-    """
-    Takes a ROS Pose message and converts it to the
-    3x4 transform format used by nerfstudio.
-    """
-    pose_msg = pose.pose
-    quat = np.array(
-        [
-            pose_msg.orientation.w,
-            pose_msg.orientation.x,
-            pose_msg.orientation.y,
-            pose_msg.orientation.z,
-        ],
-    )
+    hom_pose =ros_pose_to_homogenous(pose)
+    T_ns = hom_pose[:, [1, 2, 0, 3]]
+    T_ns[:, [0, 2]] *= -1
+    return T_ns[:3, :]
+    # """
+    # Takes a ROS Pose message and converts it to the
+    # 3x4 transform format used by nerfstudio.
+    # """
+    # pose_msg = pose.pose
+    # quat = np.array(
+    #     [
+    #         pose_msg.orientation.w,
+    #         pose_msg.orientation.x,
+    #         pose_msg.orientation.y,
+    #         pose_msg.orientation.z,
+    #     ],
+    # )
 
-    posi = torch.tensor([pose_msg.position.x, pose_msg.position.y, pose_msg.position.z])
-    R = torch.tensor(qvec2rotmat(quat))
-    T = torch.cat([R, posi.unsqueeze(-1)], dim=-1)
-    T = T.to(dtype=torch.float32)
-    if static_transform is not None:
-        T = pose_utils.multiply(T, static_transform)
-        T= T[:, [1, 2, 0, 3]]
-        T[:, [0, 2]] *= -1
-        # print("-------------------------")
-        # print(T)
-        # print("-------------------------")
-        # T2 = torch.zeros(3, 4)
-        # R1 = transform.Rotation.from_euler("x", 0, degrees=True).as_matrix()
-        # R2 = transform.Rotation.from_euler("z", 0, degrees=True).as_matrix()
-        # R3 = transform.Rotation.from_euler("y", 0, degrees=True).as_matrix()
-        # R = torch.from_numpy(R3 @ R2 @ R1)
-        # T2[:, :3] = R
-        # T = pose_utils.multiply(T2, T)
-      
+    
+    # if static_transform is not None:
+    #     posi = torch.tensor([pose_msg.position.x, pose_msg.position.y, pose_msg.position.z])
+    #     R = torch.tensor(qvec2rotmat(quat))
+    #     T = torch.cat([R, posi.unsqueeze(-1)], dim=-1)
+    #     T = T.to(dtype=torch.float32)
+    #     # print(T)
+    #     print("-------------------------")
+    #     T = pose_utils.multiply(T, static_transform)
+    #     T= T[:, [1, 2, 0, 3]]
+    #     T[:, [0, 2]] *= -1
+    #     # print("-------------------------")
+    #     # print(T)
+    #     # print("-------------------------")
+    #     # T2 = torch.zeros(3, 4)
+    #     # R1 = transform.Rotation.from_euler("x", 0, degrees=True).as_matrix()
+    #     # R2 = transform.Rotation.from_euler("z", 0, degrees=True).as_matrix()
+    #     # R3 = transform.Rotation.from_euler("y", 0, degrees=True).as_matrix()
+    #     # R = torch.from_numpy(R3 @ R2 @ R1)
+    #     # T2[:, :3] = R
+    #     # T = pose_utils.multiply(T2, T)
+    #     print(T[:3, :])
 
     
 
-    return T.to(dtype=torch.float32)
+    #     return T[:3, :].to(dtype=torch.float32)
 
 
 class ROSDataloader(DataLoader):
@@ -156,7 +177,8 @@ class ROSDataloader(DataLoader):
         
         # self.ts = TimeSynchronizer([self.image_sub, self.pose_sub], 100)
         print("=======================TimeSynchronizer==========================")
-        self.ts = ApproximateTimeSynchronizer([self.image_sub, self.pose_sub,self.lidar_sub], 100, 0.1)
+        self.ts = ApproximateTimeSynchronizer([self.image_sub, self.pose_sub,self.lidar_sub], 100, 0.05)
+        # self.ts = TimeSynchronizer([self.image_sub, self.pose_sub,self.lidar_sub], 100)
 # self.lidar_sub
         print("=======================After Sync==========================")
         # print(self.ts_image_pose_callback)
@@ -187,7 +209,7 @@ class ROSDataloader(DataLoader):
         ):
             # ----------------- Handling the IMAGE ----------------
             # Load the image message directly into the torch
-            # print("-------------image index: ",self.current_idx,"----------------------")
+            print("-------------image index: ",self.current_idx,"----------------------")
             im_tensor = torch.frombuffer(image.data, dtype=torch.uint8).reshape(
                 self.H, self.W, -1
             )
