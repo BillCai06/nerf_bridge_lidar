@@ -3,7 +3,7 @@ name = "nsros"
 version = "0.1"
 
 dependencies = [
-	"nerfstudio==1.0.1"
+	"nerfstudio @ git+https://github.com/nerfstudio-project/nerfstudio.git"
 ]
 
 [tool.setuptools.packages.find]
