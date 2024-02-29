@@ -179,7 +179,7 @@ RosDepthSplatfacto = MethodSpecification(
         gradient_accumulation_steps={"camera_opt": 100},
         pipeline=VanillaPipelineConfig(
             datamanager=ROSFullImageDataManagerConfig(
-                _target=ROSFullImageDataManager[ROSDepthDataset],
+                _target=ROSFullImageDataManager[ROSLidarDataset],
                 dataparser=ROSDataParserConfig(aabb_scale=1.0),
             ),
             model=ROSSplatfactoModelConfig(num_random=50),
